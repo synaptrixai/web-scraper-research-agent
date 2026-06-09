@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "runtimeApiVersion": 1,
+  "agent": {
+    "id": "spilli-web-scraper",
+    "name": "Web Scraper Research Agent",
+    "apiVersion": 1,
+    "description": "Researches topics with Brave Search and scrapes JavaScript-rendered pages with Playwright.",
+    "loopEntry": "agentLoop.js"
+  },
+  "localToolEntries": [
+    "tools/webResearchTools.js"
+  ],
+  "toolDeps": []
+}
