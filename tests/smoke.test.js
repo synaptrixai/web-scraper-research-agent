@@ -33,12 +33,14 @@ test('runtime executes web search and scrape tool calls before final answer', as
   const { createAgentRuntime } = require('../agentLoop');
   const events = [];
   const statuses = [];
+  const modelQueries = [];
   let modelCalls = 0;
 
   const runtime = createAgentRuntime({
     runtimeApiVersion: 1,
     manifest: {},
-    async runModel() {
+    async runModel(payload) {
+      modelQueries.push(payload.query);
       modelCalls += 1;
       if (modelCalls === 1) {
         return {
@@ -95,6 +97,12 @@ test('runtime executes web search and scrape tool calls before final answer', as
   );
 
   assert.strictEqual(modelCalls, 3);
+  assert.match(modelQueries[0], /Research dynamic scraping/);
+  assert.doesNotMatch(modelQueries[1], /Research dynamic scraping/);
+  assert.match(modelQueries[1], /previous assistant action/);
+  assert.match(modelQueries[1], /example\.com/);
+  assert.doesNotMatch(modelQueries[2], /searchBrave/);
+  assert.match(modelQueries[2], /Example Domain/);
   assert.deepStrictEqual(events, [
     ['call', 'web.searchBrave'],
     ['result', true],

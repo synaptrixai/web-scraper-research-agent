@@ -34,6 +34,12 @@ npm run install-browser
 
 The scraper rejects obvious localhost and private-network targets, clamps page counts, clamps timeouts, and never returns the Brave API key.
 
+## Conversation Context
+
+The SpiLLI extension hydrates prior conversation messages into SpiLLIHost and sends strict deltas after that. This agent sends only the current user request on its first model call, then only the newly completed web-tool results on each later call. It intentionally does not prepend `conversationSummary`, `recentMessages`, the original request, or older research results, because replaying those values would duplicate host-managed history.
+
+Each main or sub-agent chat context is identified by the extension's `contextId` and may share a model/network allocation with other contexts without sharing history. The agent keeps no process-global transcript state.
+
 ## Example Prompts
 
 - `Research the latest guidance on structured data for product pages and cite sources.`

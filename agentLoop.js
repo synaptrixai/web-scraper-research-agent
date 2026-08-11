@@ -113,27 +113,6 @@ function hasUrl(text) {
   return /\bhttps?:\/\/[^\s<>)"']+/i.test(text || '');
 }
 
-function summarizeRecentMessages(request) {
-  const recent = Array.isArray(request.recentMessages) ? request.recentMessages.slice(-6) : [];
-  if (!recent.length && !request.conversationSummary) {
-    return '';
-  }
-
-  const lines = [];
-  if (request.conversationSummary) {
-    lines.push(`Conversation summary: ${request.conversationSummary}`);
-  }
-  for (const message of recent) {
-    if (!message || typeof message.content !== 'string') {
-      continue;
-    }
-    const role = typeof message.role === 'string' ? message.role : 'message';
-    lines.push(`${role}: ${message.content.slice(0, 1000)}`);
-  }
-
-  return lines.join('\n');
-}
-
 function buildSystemPrompt(request) {
   const host = request.hostEnvironment || {};
   const hasBraveKey = Boolean(process.env.BRAVE_SEARCH_API_KEY && process.env.BRAVE_SEARCH_API_KEY.trim());
@@ -173,8 +152,16 @@ function buildSystemPrompt(request) {
   ].join('\n');
 }
 
-function buildUserQuery(request, toolResults) {
-  const context = summarizeRecentMessages(request);
+function buildUserQuery(request, toolResults, iteration = 1) {
+  if (iteration > 1) {
+    return [
+      'Web tool results from the previous assistant action:',
+      safeJson(toolResults),
+      '',
+      'Continue from the existing host-managed chat context. Decide the next web.* tool call or produce the final cited answer.'
+    ].join('\n');
+  }
+
   const hints = [];
   if (hasUrl(request.query)) {
     hints.push('The user included URL(s); scrape them before answering.');
@@ -186,16 +173,8 @@ function buildUserQuery(request, toolResults) {
   }
 
   const parts = [];
-  if (context) {
-    parts.push('Conversation context:', context);
-  }
   parts.push('User request:', request.query || '');
   parts.push('Agent hint:', hints.join(' '));
-
-  if (toolResults.length) {
-    parts.push('Tool results so far:', safeJson(toolResults));
-    parts.push('Use these results to decide the next web.* tool call or produce the final cited answer.');
-  }
 
   return parts.join('\n\n');
 }
@@ -243,18 +222,18 @@ function createAgentRuntime(context) {
 
   async function runTurn(request, hooks = {}) {
     const maxIterations = getIterationLimit(request || {});
-    const toolResults = [];
+    let pendingToolResults = [];
     let lastModelRun = { raw: '', content: '', isHarmony: false };
 
     for (let iteration = 1; iteration <= maxIterations; iteration += 1) {
       hooks.onStatus?.({
         phase: 'planning',
-        message: toolResults.length ? 'Reviewing web results.' : 'Planning web research.',
+        message: pendingToolResults.length ? 'Reviewing web results.' : 'Planning web research.',
         iteration
       });
 
       const prompt = buildSystemPrompt(request || {});
-      const query = buildUserQuery(request || {}, toolResults);
+      const query = buildUserQuery(request || {}, pendingToolResults, iteration);
 
       if (typeof hooks.onModelRequest === 'function') {
         hooks.onModelRequest({ iteration, prompt, query });
@@ -301,6 +280,7 @@ function createAgentRuntime(context) {
         return normalizeResult(lastModelRun, { mode: 'external', agentId: AGENT_ID });
       }
 
+      const completedToolResults = [];
       for (let index = 0; index < toolCalls.length; index += 1) {
         const call = {
           toolName: String(toolCalls[index].toolName || ''),
@@ -321,7 +301,7 @@ function createAgentRuntime(context) {
         });
 
         const result = await executeAllowedTool(context, call);
-        toolResults.push(result);
+        completedToolResults.push(result);
 
         if (typeof hooks.onToolResult === 'function') {
           hooks.onToolResult(result);
@@ -335,6 +315,7 @@ function createAgentRuntime(context) {
           progress: toolCalls.length > 0 ? (index + 1) / toolCalls.length : undefined
         });
       }
+      pendingToolResults = completedToolResults;
     }
 
     return normalizeResult(
