@@ -118,6 +118,23 @@ test('runtime executes web search and scrape tool calls before final answer', as
   assert.ok(result.content.includes('Playwright'));
 });
 
+test('prompt makes tool calls and final answers mutually exclusive', () => {
+  const { _private } = require('../agentLoop');
+  const prompt = _private.buildSystemPrompt({ hostEnvironment: {} });
+  const followUp = _private.buildUserQuery(
+    { query: 'ignored after the first model call' },
+    [{ callId: 'search1', toolName: 'web.searchDuckDuckGo', ok: true, result: { results: [] } }],
+    2
+  );
+
+  assert.match(prompt, /exactly one action per response/i);
+  assert.match(prompt, /end the response immediately after the JSON/i);
+  assert.match(prompt, /Wait for that later call/i);
+  assert.match(prompt, /Never predict, simulate, or invent a pending tool result/i);
+  assert.match(followUp, /exactly one action/i);
+  assert.doesNotMatch(followUp, /ignored after the first model call/);
+});
+
 test('runtime rejects unsupported tool calls with structured result', async () => {
   const { createAgentRuntime } = require('../agentLoop');
   const toolResults = [];

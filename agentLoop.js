@@ -131,6 +131,14 @@ function buildSystemPrompt(request) {
     '{"toolName":"web.searchDuckDuckGo","callId":"call1b","args":{"query":"topic","count":8}}',
     '{"toolName":"web.scrapePages","callId":"call2","args":{"urls":["https://example.com"],"maxCharsPerPage":12000}}',
     '',
+    'Response protocol (mandatory):',
+    '- Choose exactly one action per response: request web tools OR provide the final answer. Never do both.',
+    '- When requesting a tool, emit only the tool-call JSON payload in the commentary channel and end the response immediately after the JSON.',
+    '- A tool request is not a final answer. Do not add analysis, conclusions, citations, guessed values, or a final channel after it.',
+    '- The harness executes the requested tool after your response ends and calls you again with the actual result.',
+    '- Wait for that later call. Never predict, simulate, or invent a pending tool result.',
+    '- Produce a final answer only in a response containing no tool call and only after the required evidence is present in earlier tool results.',
+    '',
     'Research policy:',
     '- If the user provides one or more URLs, scrape those URLs directly before answering.',
     '- If the user asks to research a topic, search first, then scrape the most relevant trustworthy results.',
@@ -158,7 +166,8 @@ function buildUserQuery(request, toolResults, iteration = 1) {
       'Web tool results from the previous assistant action:',
       safeJson(toolResults),
       '',
-      'Continue from the existing host-managed chat context. Decide the next web.* tool call or produce the final cited answer.'
+      'Continue from the existing host-managed chat context using these newly returned results.',
+      'Choose exactly one action: emit only the next web.* tool-call JSON and stop, or emit a final cited answer with no tool call.'
     ].join('\n');
   }
 
